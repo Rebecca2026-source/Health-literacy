@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>代码数据与稿件结果配套核查</title>
+<style>
+:root{color-scheme:light;--ink:#182638;--muted:#5c6b7c;--line:#dce3ea;--accent:#235c85}
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:var(--ink);font:16px/1.85 "Segoe UI","Microsoft YaHei",sans-serif}
+header{background:#fff;border-bottom:1px solid var(--line);padding:18px max(24px,calc((100vw - 1100px)/2));display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+header b{font-size:18px}nav{display:flex;gap:20px}a{color:var(--accent);text-underline-offset:4px}
+main{max-width:1100px;margin:28px auto;padding:36px 48px;background:white;border:1px solid var(--line);border-radius:8px}
+h1{font-size:29px;line-height:1.4;margin:0 0 22px}h2{font-size:23px;margin:40px 0 16px;padding-top:12px;border-top:1px solid var(--line)}h3{font-size:19px;margin:28px 0 10px}
+p{margin:12px 0;overflow-wrap:anywhere}li{margin:8px 0}code{font:0.88em/1.6 Consolas,monospace;background:#f0f3f6;padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.table-wrap{overflow:auto;margin:22px 0}table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.65}th,td{text-align:left;vertical-align:top;border:1px solid var(--line);padding:12px 14px;min-width:130px}th{background:#edf2f6}tbody tr:nth-child(even){background:#fafbfd}
+details{border:1px solid var(--line);border-radius:5px;margin:14px 0}summary{cursor:pointer;padding:14px 18px;font-weight:600;background:#f6f8fa}pre{margin:0;padding:20px;overflow:auto;line-height:1.6;font-size:13px;tab-size:4}pre code{background:transparent;padding:0;white-space:pre;overflow-wrap:normal}
+.note,footer{color:var(--muted);font-size:14px}footer{padding-top:24px;border-top:1px solid var(--line);margin-top:36px}
+@media(max-width:700px){main{margin:12px;padding:24px 18px}h1{font-size:24px}header{padding:16px 20px}th,td{padding:9px}}
+@media print{body{background:#fff}header,details{display:none}main{border:0;margin:0;max-width:none;padding:0}h2,h3{break-after:avoid}tr{break-inside:avoid}table{font-size:11px}}
+</style></head><body>
+<header><b>分析复现核查</b><nav aria-label="页面导航"><a href="#report">核查报告</a><a href="#source">分析源代码</a></nav></header>
+<main><article id="report"><h1>代码数据与稿件结果配套核查报告</h1>
+<p>核查日期：2026年11月5日。</p>
+<p><strong>结论：指定代码可以直接读取指定 Excel，并成功计算出指定稿件中的主要回归结果和已核对的补充回归结果。三者在核心分析上配套。但是，当前文件组合仍有变量命名、BMI计算口径、个别数据异常及代码完整性问题，不宜直接认定为全部无问题。</strong></p>
+<p>本次完整运行了原分析脚本，没有修改源代码、输入数据或稿件。复跑输出与审计文件单独保存在本报告所在文件夹。审计既进行了原脚本复跑，也进行了独立计算和统计库交叉核对；“能复现”与“原始记录绝对正确”是两个不同的核查层次。</p>
+<h2>核查对象和范围</h2>
+<p>分析目录：<code>C:\data20250730_DXY\PLOS_ONE_final_submission_20260625\02_FINAL_DATA_USED\revision_20261104\code</code>。</p>
+<p>数据：<code>C:\data20250730_DXY\PLOS_ONE_final_submission_20260625\02_FINAL_DATA_USED\clean_data_final_analysis_680_village_std.xlsx</code>。</p>
+<p>稿件：<code>C:\data20250730_DXY\PLOS_ONE_final_submission_20260625\02_FINAL_DATA_USED\revision_20261104\Manuscript_revised_EndNote_positions.docx</code>。</p>
+<p>另核对该修订目录下的 S1–S5 Table、数据字典及 S3 Fig。为追溯变量差异，阅读了同一项目存档中的健康素养题目映射及旧版分析代码，但没有将这些旧代码替换到当前复跑流程中。</p>
+<p>Excel 第一个工作表 Sheet1 为680行、202列；第二个工作表 village_mapping 为村庄映射记录。当前脚本默认读取第一个工作表。该文件已经包含预先清洗、编码及计分的变量，应称为本次分析输入数据，不能等同于未经清洗的原始问卷导出表。</p>
+<p>本次不包含从879人原始数据库重新完成筛选、排除、纠错和计分的全过程。因此，704、701及排除21人的调查流程，以及原始问卷答案的真实性，不能仅凭这份680人分析表确认。</p>
+<h2>代码主要完成的工作</h2>
+<p>目录内包含一个主分析脚本 <code>wa_hl_smoking_analysis.py</code>、一个统计方法模块 <code>cr2_methods.py</code> 和 README。</p>
+<div class="table-wrap"><table><thead><tr><th>步骤</th><th>实际操作</th><th>对应稿件内容</th></tr></thead><tbody>
+<tr><td>数据准备</td><td>读取首个工作表，从地址提取8个村庄；将1条家庭人数32改为5；将3个吸烟史变量的负编码设为缺失</td><td>分析样本及敏感性分析准备</td></tr>
+<tr><td>健康素养暴露</td><td>将知识理念、生活方式行为、健康技能三个维度相加，除以5；另计算去除BB05的版本</td><td>每增加5分的关联及BB05敏感性分析</td></tr>
+<tr><td>结局和协变量</td><td>生成曾经吸烟、当前吸烟、每日吸烟与FTND分级；生成性别、教育、收入对数、职业、婚姻、饮酒、慢性病等变量</td><td>方法部分的结局和调整变量</td></tr>
+<tr><td>描述分析</td><td>输出吸烟人数、村庄人数、FTND分级、吸烟史均值及包年数、ICC；计算总分和三个维度的Spearman相关</td><td>部分表1、部分表2及正文</td></tr>
+<tr><td>二分类回归</td><td>对曾经/从不吸烟、当前/既往吸烟分别拟合M1、M2、主模型和扩展模型；输出aPR与OR</td><td>表3</td></tr>
+<tr><td>聚类敏感性分析</td><td>HC0、CR1、CR2、Mancl–DeRouen、村庄固定效应、随机截距、逐村删除</td><td>S1、S4表</td></tr>
+<tr><td>其他敏感性分析</td><td>家庭人数加权/调整、排除非每日吸烟者、去除BB05、性别交互、限制性立方样条、四分位数、Firth回归</td><td>S2、S4表及S3图</td></tr>
+<tr><td>FTND分析</td><td>有序logistic、Brant检验、年龄部分比例优势模型、随机截距、固定效应、FTND连续分数线性模型</td><td>表4及S3表</td></tr>
+<tr><td>缺失吸烟史处理</td><td>固定随机种子20261102，50套FCS预测均值匹配插补，分别加入开始吸烟年龄或吸烟时长，再按Rubin规则合并</td><td>表4及S3表</td></tr>
+<tr><td>村庄内外分解</td><td>同时纳入个人偏离村均值的健康素养和村均值</td><td>S5表</td></tr>
+<tr><td>输出</td><td>results.json、results.txt、S3_Fig.png</td><td>数值结果及样条图</td></tr>
+</tbody></table></div>
+<p>主模型调整年龄、性别、教育、家庭收入、职业和婚姻；扩展模型再加入饮酒、BMI、PHQ、GAD和慢性病。二分类回归的主要推断使用村庄聚类CR2和Satterthwaite自由度；有序模型使用聚类CR1和t(7)。这些设置与当前稿件基本一致。</p>
+<h2>结果是否复现</h2>
+<p>样本分布与稿件一致：680人中，从不吸烟306人、既往吸烟54人、当前吸烟320人；当前吸烟者中每日307人、非每日13人。FTND低、中、高分别为138、147、35人。吸烟史完整者303人，3个吸烟史变量分别有17人缺失。</p>
+<div class="table-wrap"><table><thead><tr><th>主模型结果，每增加5分</th><th>稿件值</th><th>本次复跑值</th><th>判断</th></tr></thead><tbody>
+<tr><td>曾经与从不吸烟 aPR</td><td>0.965，95% CI 0.929–1.003，P=0.064</td><td>相同</td><td>一致</td></tr>
+<tr><td>当前与既往吸烟 aPR</td><td>0.972，95% CI 0.954–0.991，P=0.012</td><td>相同</td><td>一致</td></tr>
+<tr><td>曾经与从不吸烟 OR</td><td>0.874，95% CI 0.738–1.036，P=0.101</td><td>相同</td><td>一致</td></tr>
+<tr><td>当前与既往吸烟 OR</td><td>0.800，95% CI 0.666–0.961，P=0.025</td><td>相同</td><td>一致</td></tr>
+<tr><td>FTND严重程度 common OR</td><td>0.881，95% CI 0.773–1.003，P=0.054</td><td>相同</td><td>一致</td></tr>
+<tr><td>FTND加入开始吸烟年龄，多重插补</td><td>0.902，95% CI 0.786–1.036，P=0.117</td><td>相同</td><td>一致</td></tr>
+<tr><td>FTND加入吸烟时长，多重插补</td><td>0.879，95% CI 0.765–1.009，P=0.062</td><td>相同</td><td>一致</td></tr>
+</tbody></table></div>
+<p>主表3、主表4和补充表共自动逐行核对94组回归结果，估计值、置信区间、P值及适用的自由度均在稿件报告精度上一致。这个数字指94组结果记录，不是94个独立统计检验。</p>
+<p>表1另核对32组连续变量描述/比较，除BMI的2组检验外一致；126项分类变量频数、百分比及检验的显示值均一致。表2的46组相关系数/P值核对中，44组直接一致，另2组为BMI，原因见下文。吸烟史均值、SD、包年数及FTND均值也与稿件一致。</p>
+<p>使用statsmodels独立拟合的两类二分类主模型，其aPR和OR与自编代码的点估计在数值精度内一致。独立有序logistic模型的主效应OR为0.8806993；重新计算聚类方差后，95% CI为0.7733896–1.0028986，P=0.0540314，与稿件一致。这里并未使用R clubSandwich逐模型验证全部自编CR2实现，也未对全部自编方法进行完整方法学认证。</p>
+<p>Brant总体P=0.274、健康素养P=0.297、年龄P=0.007；样条非线性P=0.909/0.060；性别交互P=0.059/0.591，以及逐村删除的估计范围，均与正文及补充表报告一致。</p>
+<p>S3图可以生成，曲线方向和可见置信带形态与现有图一致；图像文件哈希不同，标题位置等版式有差别。现有图未提供其逐点数值，不能把视觉相近表述为像素级或逐点数值完全相同。</p>
+<h2>发现的问题及影响</h2>
+<h3>健康素养旧总分字段容易被误用</h3>
+<p>这是最需要澄清的变量问题。Excel 中 <code>health_literacy_total</code> 并不是当前稿件实际使用的66分制总分。675/680人的该字段与三个维度之和不同；所有680人的差值都恰好等于以下6个题目之和：BA07、BA08、BB02、BB23、BB24、BC05。项目存档代码也将这一旧字段标为73分制扩展总分。</p>
+<p>当前脚本没有使用这个旧字段，而是重新计算三个维度之和作为 <code>hl</code>。本次根据存档的50题映射逐题重算，结果与当前脚本的 <code>hl</code> 在全部680人中完全一致。由此可确认，当前回归结果使用的暴露与稿件规定的50题、66分制计算口径配套。</p>
+<p>误用旧字段的后果明显：以53分为界，旧字段会得到40名“达标”，稿件使用的66分制得到7名；以40分为界，旧字段得到471名“低素养”，66分制得到536名。当前稿件这两类人数对应的是66分制。</p>
+<p>建议保留旧值以便追溯，但明确改名为历史扩展总分，并另设清楚标注的66分制分析总分；数据字典同时给出50题清单、每题得分规则和旧字段说明。不能只因为旧字段的观测最大值是65就把它当成66分制。本次没有擅自改名或覆盖数据。</p>
+<h3>BMI在描述分析与回归中使用了不同精度</h3>
+<p>Excel <code>BMI</code> 已保留一位小数；当前回归脚本直接使用该列。表1和表2的BMI结果则与 <code>weight / (height / 100)^2</code> 计算、未提前取整的BMI一致。这是可以通过数据计算解释的差异。</p>
+<div class="table-wrap"><table><thead><tr><th>位置</th><th>直接用Excel BMI</th><th>用身高体重重算BMI</th><th>稿件</th></tr></thead><tbody>
+<tr><td>表1，曾经/从不吸烟 Welch检验</td><td>t=1.68，P=0.093</td><td>t=1.67，P=0.096</td><td>后者</td></tr>
+<tr><td>表1，当前/既往吸烟 Welch检验</td><td>t=-0.04，P=0.967</td><td>t=-0.05，P=0.962</td><td>后者</td></tr>
+<tr><td>表2，曾经/从不吸烟相关</td><td>rho=-0.046，P=0.235</td><td>rho=-0.045，P=0.241</td><td>后者</td></tr>
+<tr><td>表2，当前/既往吸烟相关</td><td>rho=0.016，P=0.762</td><td>rho=0.017，P=0.747</td><td>后者</td></tr>
+</tbody></table></div>
+<p>这些差异不改变上述比较的显著性判断，且BMI仅作为扩展模型调整变量，不在主模型中。建议统一为未取整BMI，仅在报告时取小数；若这样修订，应重新生成受影响的扩展模型、表1和表2。也可以保留现有口径，但必须在可复现流程中明确两个BMI版本。</p>
+<h3>1条开始吸烟年龄存在逻辑异常</h3>
+<p>受试者ID=330，年龄20岁，记录的规律吸烟起始年龄30岁，当前吸烟时长1个月。当前代码只把负值设为缺失，没有识别“开始吸烟年龄大于当前年龄”的逻辑异常，因此该记录仍被当作已观测值使用。</p>
+<p>这可能影响开始吸烟年龄描述、含吸烟史的FTND敏感性分析，以及插补模型中的供体和预测变量。它不直接进入不含吸烟史的核心主模型。应回查问卷；若无法核实，应预先明确逻辑异常处理规则，再重跑相关描述、完整病例与插补分析。本次没有猜测其正确值，也没有据此宣称主结论已经改变。</p>
+<p>另外，303人的“起始年龄+吸烟时长−当前年龄”范围为−44至36年；停吸间隔、回忆误差或题目定义可能解释部分差异，但值得检查极端记录。本次仅将ID=330的年龄矛盾作为明确的待核实问题。</p>
+<h3>家庭人数32改为5缺少随包提供的核实证据</h3>
+<p>主脚本第52行将所有 <code>family_member == 32</code> 改成5，目前影响1人。注释写明已对照问卷核实，但本次代码包中没有相应逐条核实记录，本次审计不能独立确认“5”确为正确值。</p>
+<p>这会影响家庭人数加权和家庭人数调整的敏感性分析，不影响不含家庭人数的主模型。建议记录受试者ID、原值、新值、修改原因、核实来源和日期，并按ID定位修改，避免今后误改另一条同值记录。</p>
+<h3>当前目录不能单独生成稿件全部内容</h3>
+<p>README和主脚本称其覆盖全部稿件及补充分析，但实际没有完整表1的构建代码，没有表1 Welch、Mann–Whitney、分类变量检验的完整输出；表2只输出总分和三个维度的相关，未输出另外19个预测变量的相关。它也没有生成S1研究假设图、S2样本流程图，不能从本输入表复核受试者排除全过程。</p>
+<p>本次通过额外审计脚本独立补算了表1和表2以核对数值。因此“本次审计可以核对”不等于“当前code目录已经是一键生成所有表图的完整流程”。建议补齐表1、表2与统一的结果导出，或准确缩小README中的覆盖范围。</p>
+<h3>数值优化诊断未被保存</h3>
+<p>主脚本全局屏蔽警告；有序模型、随机截距模型和部分比例优势模型在调用优化器后直接使用 <code>r.x</code>，未检查成功标记并记录梯度、迭代次数。GLM迭代到上限后也没有显式报错。</p>
+<p>本次重现部分比例优势模型时，原优化器返回精度损失、success=False，但仍产生稿件结果。进一步采用三点数值梯度重新优化后成功收敛，OR=0.8828725，目标函数仅改善约2.7×10^-12，与原报告0.883一致；在样本协变量范围内未发现阈值交叉。这表明这次警告并未证明结果错误，但原脚本缺少可靠的诊断记录。</p>
+<p>建议保存每次拟合的收敛标记和诊断，仅定向处理已解释的警告；对自编CR2、插补、随机效应及Firth方法补充与成熟统计软件的代表性对照。插补代码目前固定50次、20轮、5名候选供体，但未导出链轨迹和插补诊断；固定种子可复现并不等于插补质量已充分验证。</p>
+<h3>软件版本需要按实际分析环境核实</h3>
+<p>稿件写Python 3.13、NumPy 2.5、pandas 3.0、SciPy 1.18、Matplotlib 3.11。本次成功复跑实际使用Python 3.13.9、NumPy 2.3.5、pandas 2.3.3、SciPy 1.16.3、Matplotlib 3.10.6。</p>
+<p>这证明当前环境可以复现主要报告值，但不能据此断言作者原运行环境不存在。应核对原分析环境，将版本表述与实际记录对应，并添加requirements或环境锁文件。内置文档运行环境缺少SciPy和Matplotlib，因此文件读取使用内置环境，统计复跑使用本机已有且依赖齐全的Anaconda环境；未安装或升级任何包。</p>
+<h2>数据结构核查中未发现的问题</h2>
+<ul>
+<li>680人ID无重复，年龄范围18–69岁。</li>
+<li>8个村庄分组与映射表对应的分区一致；A–H样本量为158、84、77、76、76、74、70、65。</li>
+<li>主模型和扩展模型用到的分析字段无缺失，收入均为正值，可取对数。</li>
+<li>当前吸烟者FTND总分与6个题目得分之和全部一致，PHQ和GAD总分也与对应题目得分之和一致。</li>
+<li>民族数值列有57人缺失且存在其他编码，但民族文本均包含“佤族”，<code>wa_ethnicity_text</code>全部为1；不能仅按数值列等于4筛选，否则会误排当前样本。现有代码未进行这种误筛选。</li>
+</ul>
+<h2>建议的处理顺序</h2>
+<ol>
+<li>优先澄清健康素养66分总分与历史扩展总分，并回查ID=330和家庭人数修正记录。</li>
+<li>统一或明确BMI计算口径，补齐表1、表2生成代码。</li>
+<li>完善拟合收敛和插补诊断，记录实际依赖版本，保存统一数据处理日志。</li>
+<li>确定数据修正规则后，重新运行所有受影响分析并自动更新表格。若不改变数据和计算口径，当前核心回归结果已有明确的复现证据。</li>
+</ol>
+<p>本次结果支持“核心代码、分析输入与稿件回归结果相互配套”；尚不能支持“全部原始记录无误、所有计分规则均已对照原始问卷验证、整个投稿包已完整一键复现”。</p>
+<h2>审计证据文件</h2>
+<ul>
+<li><code>rerun/results.txt</code>：原脚本完整复跑的可读数值结果。</li>
+<li><code>rerun/results.json</code>：原脚本机器可读结果。</li>
+<li><code>model_comparison.csv</code>：94组回归结果逐项比较。</li>
+<li><code>table2_comparison.csv</code>：46组相关分析逐项比较。</li>
+<li><code>verification.json</code>：独立检验、数据质量和差异定位。</li>
+<li><code>source_sha256.json</code>：输入数据、稿件和两个源脚本的SHA256指纹。</li>
+</ul>
+<p>上述证据和复跑输出位于本报告同一目录及其rerun子目录。它们用于此次审计，未覆盖原项目文件。</p></article>
+<section id="source"><h2>分析源代码</h2><p class="note">以下为本次核查所用文件的原文，展开可查看。此HTML用于阅读报告和代码；实际统计计算仍需在Python环境中运行脚本。</p><details><summary>index.html.py</summary><pre><code>&quot;&quot;&quot;wa_hl_smoking_analysis.py
+
+Health literacy, smoking status and nicotine dependence among Wa adults in rural southwest China.
+Complete analysis code for the revised manuscript (PLOS ONE, PONE-D-26-31483).
+
+Usage:
+    python wa_hl_smoking_analysis.py &lt;path to analytic data .xlsx&gt; [output folder]
+
+Requirements: Python &gt;= 3.10, numpy, pandas, scipy, matplotlib, openpyxl.
+All statistical methods are implemented in cr2_methods.py (same folder).
+
+Outputs (in the output folder):
+    results.json   all estimates used in the manuscript, tables and Supporting Information
+    results.txt    readable log of the same results
+    S3_Fig.png     restricted cubic spline curves for health literacy
+&quot;&quot;&quot;
+import sys, os, json, warnings
+import numpy as np, pandas as pd
+from scipy import stats
+warnings.filterwarnings(&#x27;ignore&#x27;)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from cr2_methods import *
+
+DATA = sys.argv[1] if len(sys.argv) &gt; 1 else &#x27;clean_data_final_analysis_680_village_std.xlsx&#x27;
+OUTDIR = sys.argv[2] if len(sys.argv) &gt; 2 else &#x27;.&#x27;
+os.makedirs(OUTDIR, exist_ok=True)
+SEED = 20261102
+R, LOG = {}, []
+
+def log(*a):
+    s = &#x27; &#x27;.join(str(x) for x in a); print(s); LOG.append(s)
+
+def fmt(r, d=3):
+    df = &#x27;&#x27; if np.isinf(r.get(&#x27;df&#x27;, np.inf)) else f&quot;; df={r[&#x27;df&#x27;]:.1f}&quot;
+    return f&quot;{r[&#x27;est&#x27;]:.{d}f} ({r[&#x27;lo&#x27;]:.{d}f} to {r[&#x27;hi&#x27;]:.{d}f}); P={r[&#x27;p&#x27;]:.3f}{df}&quot;
+
+def keep(key, r):
+    R[key] = {k: (float(v) if v is not None else None) for k, v in r.items()}
+    log(f&#x27;{key}: {fmt(r, 3 if &quot;linear&quot; not in key else 2)}&#x27;)
+    return r
+
+# =====================================================================
+# 1. Data preparation
+# =====================================================================
+d = pd.read_excel(DATA)
+d[&#x27;village_name&#x27;] = d.village_text.str.extract(r&#x27;县(.+?村)&#x27;)[0]
+assert d.village_name.notna().all() and d.village_name.nunique() == 8, &#x27;village coding&#x27;
+# anonymised village labels A-H (by sample size), used in all outputs
+order = d.village_name.value_counts().index.tolist()
+d[&#x27;village&#x27;] = d.village_name.map({v: &#x27;Village &#x27; + &#x27;ABCDEFGH&#x27;[i] for i, v in enumerate(order)})
+
+d.loc[d.family_member == 32, &#x27;family_member&#x27;] = 5           # data-entry error verified against questionnaire
+SH = [&#x27;gulvxiyan_age&#x27;, &#x27;muqianyanling_month&#x27;, &#x27;jinyiyue_meitianpingjunxiyan&#x27;]
+for v in SH:                                                  # negative codes = missing
+    d.loc[d[v] &lt; 0, v] = np.nan
+
+# exposure: total health-literacy score (0-66) = sum of the three aspect scores
+d[&#x27;hl&#x27;] = d[[&#x27;Basic_Knowledge_Concepts_22_28&#x27;, &#x27;Healthy_Lifestyle_and_Behavior_18_22&#x27;, &#x27;Health_Skills_13_16&#x27;]].sum(axis=1)
+d[&#x27;hl5&#x27;] = d.hl/5                                             # per 5-point increment
+d[&#x27;hl5_noBB05&#x27;] = (d.hl-d.BB05)/5                             # item BB05 (smoking harms) removed
+
+# covariates
+d[&#x27;male&#x27;] = (d.gender == 1)*1.
+d[&#x27;edu_prim&#x27;] = (d.education == 2)*1.                         # reference: illiterate
+d[&#x27;edu_mid&#x27;] = (d.education &gt;= 3)*1.                          # middle school or above
+d[&#x27;loginc&#x27;] = np.log(d.family_income)
+d[&#x27;farmer&#x27;] = (d.Occupation == 6)*1.
+d[&#x27;married&#x27;] = (d.marriage == 2)*1.
+d[&#x27;drink&#x27;] = (d.AUDIT1 &gt;= 3)*1.                               # at least 2-4 times per month
+d[&#x27;chronic&#x27;] = (d.chronic_disease != -3)*1.
+d[&#x27;hhsize&#x27;] = d.family_member.astype(float)
+
+# outcomes. smoking_status_raw: 1 daily, 2 non-daily, 3 former, 4 never (question A10)
+d[&#x27;ever&#x27;] = d.smoking_status_raw.isin([1, 2, 3])*1.
+d[&#x27;current&#x27;] = d.smoking_status_raw.isin([1, 2])*1.
+d[&#x27;daily&#x27;] = (d.smoking_status_raw == 1)*1.
+d[&#x27;ftnd_sev&#x27;] = np.select([d.FTND_total &lt;= 3, d.FTND_total &lt;= 6], [0, 1], 2)   # low / moderate / high
+
+M1 = [&#x27;age&#x27;, &#x27;male&#x27;]
+M2 = M1+[&#x27;edu_prim&#x27;, &#x27;edu_mid&#x27;]
+CORE = M2+[&#x27;loginc&#x27;, &#x27;farmer&#x27;, &#x27;married&#x27;]                     # main model (confounders)
+EXT = CORE+[&#x27;drink&#x27;, &#x27;BMI&#x27;, &#x27;PHQ_total&#x27;, &#x27;GAD_total&#x27;, &#x27;chronic&#x27;]   # extended model (former M4)
+
+ever = d.copy(); ever[&#x27;y&#x27;] = ever.ever
+cur = d[d.ever == 1].copy(); cur[&#x27;y&#x27;] = cur.current
+cs = d[d.current == 1].copy()
+
+def Xmat(dd, cols, fe=False, exp=&#x27;hl5&#x27;):
+    X = dd[[exp]+cols].astype(float)
+    if fe: X = pd.concat([X, pd.get_dummies(dd.village, drop_first=True).astype(float)], axis=1)
+    X.insert(0, &#x27;const&#x27;, 1.); return X.values
+
+def e_j(k, j=1):
+    c = np.zeros(k); c[j] = 1.; return c
+
+def binary(dd, cols, fam=&#x27;poisson&#x27;, method=&#x27;cr2&#x27;, fe=False, exp=&#x27;hl5&#x27;, pw=None):
+    X = Xmat(dd, cols, fe, exp)
+    return glm_contrast(dd.y.values, X, dd.village.values, fam, e_j(X.shape[1]), method, pw)
+
+def ordX(df, cols, exp=&#x27;hl5&#x27;, fe=False):
+    X = df[[exp]+cols].astype(float)
+    if fe: X = pd.concat([X, pd.get_dummies(df.village, drop_first=True).astype(float)], axis=1)
+    X = X.values; return X-X.mean(0)
+
+# =====================================================================
+# 2. Sample description
+# =====================================================================
+log(&#x27;=== Sample ===&#x27;)
+R[&#x27;n&#x27;] = dict(total=len(d), never=int((d.ever == 0).sum()), former=int(((d.ever == 1) &amp; (d.current == 0)).sum()),
+              current=len(cs), daily=int(d.daily.sum()), nondaily=int((d.smoking_status_raw == 2).sum()),
+              ftnd_low=int((cs.ftnd_sev == 0).sum()), ftnd_mod=int((cs.ftnd_sev == 1).sum()), ftnd_high=int((cs.ftnd_sev == 2).sum()),
+              smoking_history_available=int(cs.gulvxiyan_age.notna().sum()))
+R[&#x27;village_n&#x27;] = d.village.value_counts().sort_index().to_dict()
+R[&#x27;former_by_village&#x27;] = {k: int(v) for k, v in cur.groupby(&#x27;village&#x27;).y.apply(lambda s: (s == 0).sum()).items()}
+R[&#x27;icc&#x27;] = dict(hl=icc_anova(d.hl, d.village), ever=icc_anova(ever.y, ever.village),
+                current=icc_anova(cur.y, cur.village), ftnd=icc_anova(cs.FTND_total, cs.village))
+o = cs.dropna(subset=SH)
+py = o.jinyiyue_meitianpingjunxiyan/20*o.muqianyanling_month/12
+R[&#x27;smoking_history&#x27;] = dict(init_mean=o.gulvxiyan_age.mean(), init_sd=o.gulvxiyan_age.std(),
+                            dur_mean=(o.muqianyanling_month/12).mean(), dur_sd=(o.muqianyanling_month/12).std(),
+                            cpd_mean=o.jinyiyue_meitianpingjunxiyan.mean(), cpd_sd=o.jinyiyue_meitianpingjunxiyan.std(),
+                            py_median=py.median(), py_q1=py.quantile(.25), py_q3=py.quantile(.75))
+for k in [&#x27;n&#x27;, &#x27;village_n&#x27;, &#x27;former_by_village&#x27;, &#x27;icc&#x27;, &#x27;smoking_history&#x27;]: log(k, R[k])
+
+# Table 2: Spearman correlations (unchanged from the original analysis)
+preds = {&#x27;Total health-literacy score&#x27;: &#x27;hl&#x27;, &#x27;Knowledge and attitudes&#x27;: &#x27;Basic_Knowledge_Concepts_22_28&#x27;,
+         &#x27;Lifestyle and behavior&#x27;: &#x27;Healthy_Lifestyle_and_Behavior_18_22&#x27;, &#x27;Health-related skills&#x27;: &#x27;Health_Skills_13_16&#x27;}
+R[&#x27;spearman&#x27;] = {}
+for lab, v in preds.items():
+    r1 = stats.spearmanr(ever[v], ever.y); r2 = stats.spearmanr(cur[v], cur.y)
+    R[&#x27;spearman&#x27;][lab] = [r1.statistic, r1.pvalue, r2.statistic, r2.pvalue]
+log(&#x27;spearman&#x27;, {k: np.round(v, 3).tolist() for k, v in R[&#x27;spearman&#x27;].items()})
+
+# =====================================================================
+# 3. Main models (Table 3): modified Poisson (aPR) and logistic (OR),
+#    village-clustered CR2 variance with Satterthwaite degrees of freedom
+# =====================================================================
+log(&#x27;\n=== Table 3 ===&#x27;)
+for lab, dd in [(&#x27;ever&#x27;, ever), (&#x27;current&#x27;, cur)]:
+    for mn, cols in [(&#x27;M1&#x27;, M1), (&#x27;M2&#x27;, M2), (&#x27;core&#x27;, CORE), (&#x27;extended&#x27;, EXT)]:
+        keep(f&#x27;T3_{lab}_{mn}_aPR&#x27;, binary(dd, cols))
+        keep(f&#x27;T3_{lab}_{mn}_OR&#x27;, binary(dd, cols, &#x27;logit&#x27;))
+    keep(f&#x27;T3_{lab}_originalM4_HC0_aPR&#x27;, binary(dd, EXT, method=&#x27;hc0&#x27;))   # reproduces the original manuscript
+
+# =====================================================================
+# 4. Sensitivity analyses for clustering (S1 Table)
+# =====================================================================
+log(&#x27;\n=== S1 Table: variance estimators and village structure ===&#x27;)
+for lab, dd in [(&#x27;ever&#x27;, ever), (&#x27;current&#x27;, cur)]:
+    keep(f&#x27;S1_{lab}_HC0&#x27;, binary(dd, CORE, method=&#x27;hc0&#x27;))
+    keep(f&#x27;S1_{lab}_CR1&#x27;, binary(dd, CORE, method=&#x27;cr1&#x27;))
+    keep(f&#x27;S1_{lab}_CR2&#x27;, binary(dd, CORE))
+    keep(f&#x27;S1_{lab}_MD&#x27;, binary(dd, CORE, method=&#x27;md&#x27;))
+    keep(f&#x27;S1_{lab}_FE&#x27;, binary(dd, CORE, fe=True))
+    th, V = ri_logit(dd.y.values, Xmat(dd, CORE), dd.village.values)
+    keep(f&#x27;S1_{lab}_RI_OR&#x27;, ci(th[1], np.sqrt(V[1, 1]), np.inf)); R[f&#x27;S1_{lab}_RI_sd&#x27;] = float(np.exp(th[-1]))
+    keep(f&#x27;S1_{lab}_CR2_OR&#x27;, binary(dd, CORE, &#x27;logit&#x27;))
+    loo = {}
+    for v in sorted(dd.village.unique()):
+        loo[v] = binary(dd[dd.village != v], CORE)
+        log(f&#x27;   leave out {v}: {fmt(loo[v])}&#x27;)
+    R[f&#x27;S4_{lab}_LOO&#x27;] = {k: {a: float(b) for a, b in v.items()} for k, v in loo.items()}
+
+# =====================================================================
+# 5. Further sensitivity analyses (S4 Table)
+# =====================================================================
+log(&#x27;\n=== S4 Table ===&#x27;)
+for lab, dd in [(&#x27;ever&#x27;, ever), (&#x27;current&#x27;, cur)]:
+    keep(f&#x27;S4_{lab}_hhweight&#x27;, binary(dd, CORE, pw=dd.hhsize.values/dd.hhsize.mean()))
+    keep(f&#x27;S4_{lab}_hhadjust&#x27;, binary(dd, CORE+[&#x27;hhsize&#x27;]))
+    dl = dd[dd.smoking_status_raw != 2]
+    keep(f&#x27;S4_{lab}_dailyonly&#x27;, binary(dl, CORE)); R[f&#x27;S4_{lab}_dailyonly&#x27;][&#x27;n&#x27;] = len(dl)
+    keep(f&#x27;S2_{lab}_noBB05&#x27;, binary(dd, CORE, exp=&#x27;hl5_noBB05&#x27;))
+    # sex interaction
+    dd2 = dd.assign(hlxmale=dd.hl5*dd.male)
+    X = Xmat(dd2, [&#x27;hlxmale&#x27;]+CORE); b, Xt, rt = fit_glm(dd2.y.values, X, &#x27;poisson&#x27;); k = X.shape[1]
+    keep(f&#x27;S4_{lab}_int_p&#x27;, ci(*cr2(b, Xt, rt, dd2.village.values, e_j(k, 2))))
+    keep(f&#x27;S4_{lab}_women&#x27;, ci(*cr2(b, Xt, rt, dd2.village.values, e_j(k, 1))))
+    keep(f&#x27;S4_{lab}_men&#x27;, ci(*cr2(b, Xt, rt, dd2.village.values, e_j(k, 1)+e_j(k, 2))))
+    # linearity: restricted cubic spline, knots at 10th/50th/90th percentiles
+    kn = np.percentile(dd.hl, [10, 50, 90]); S = rcs_basis(dd.hl.values, kn)/5
+    base = Xmat(dd, CORE); X = np.column_stack([base[:, :2], S, base[:, 2:]])
+    keep(f&#x27;S4_{lab}_nonlinear&#x27;, glm_contrast(dd.y.values, X, dd.village.values, &#x27;poisson&#x27;, e_j(X.shape[1], 2)))
+    R[f&#x27;S4_{lab}_knots&#x27;] = kn.tolist()
+    q = pd.qcut(dd.hl, 4, labels=False); cuts = pd.qcut(dd.hl, 4).cat.categories
+    Xq = np.column_stack([np.ones(len(dd)), (q == 1)*1., (q == 2)*1., (q == 3)*1., dd[CORE].values.astype(float)])
+    R[f&#x27;S4_{lab}_quartile_cuts&#x27;] = [str(c) for c in cuts]
+    for j in (1, 2, 3):
+        keep(f&#x27;S4_{lab}_Q{j+1}&#x27;, glm_contrast(dd.y.values, Xq, dd.village.values, &#x27;poisson&#x27;, e_j(Xq.shape[1], j)))
+
+# Firth penalised logistic regression, current vs former (profile penalised-likelihood CI)
+for mn, cols, fe in [(&#x27;core&#x27;, CORE, False), (&#x27;extended&#x27;, EXT, False), (&#x27;core_FE&#x27;, CORE, True)]:
+    keep(f&#x27;S4_current_firth_{mn}&#x27;, firth_ci(cur.y.values, Xmat(cur, cols, fe), 1))
+
+# =====================================================================
+# 6. FTND severity (Table 4, S3 Table)
+# =====================================================================
+log(&#x27;\n=== Table 4 / S3 Table ===&#x27;)
+y, g = cs.ftnd_sev.values, cs.village.values
+keep(&#x27;T4_core&#x27;, ordinal_contrast(ordX(cs, CORE), y, g, 0, &#x27;cr1&#x27;))
+keep(&#x27;T4_extended&#x27;, ordinal_contrast(ordX(cs, EXT), y, g, 0, &#x27;cr1&#x27;))
+keep(&#x27;T4_originalM4_HC0&#x27;, ordinal_contrast(ordX(cs, EXT), y, g, 0, &#x27;hc0&#x27;))
+chi, dfo, pb, per, bs = brant(ordX(cs, CORE), y)
+R[&#x27;T4_brant&#x27;] = dict(chi2=chi, df=dfo, p=pb, p_vars=dict(zip([&#x27;hl5&#x27;]+CORE, per)))
+log(&#x27;Brant core&#x27;, R[&#x27;T4_brant&#x27;])
+Xp = ordX(cs, [c for c in CORE if c != &#x27;age&#x27;]); zp = (cs.age-cs.age.mean()).values
+keep(&#x27;T4_partialPO_age&#x27;, ppo_contrast(Xp, zp, y, g, 0))
+keep(&#x27;S3_FE&#x27;, ordinal_contrast(ordX(cs, CORE, fe=True), y, g, 0, &#x27;cr1&#x27;))
+keep(&#x27;S3_noBB05&#x27;, ordinal_contrast(ordX(cs, CORE, &#x27;hl5_noBB05&#x27;), y, g, 0, &#x27;cr1&#x27;))
+(th, V), K = ri_ordinal(y, ordX(cs, CORE), g)
+keep(&#x27;S3_RI&#x27;, ci(th[K-1], np.sqrt(V[K-1, K-1]), np.inf)); R[&#x27;S3_RI_sd&#x27;] = float(np.exp(th[-1]))
+cs2 = cs.assign(y=cs.FTND_total.astype(float))
+for mn, cols, fe in [(&#x27;core&#x27;, CORE, False), (&#x27;extended&#x27;, EXT, False), (&#x27;core_FE&#x27;, CORE, True)]:
+    X = Xmat(cs2, cols, fe)
+    keep(f&#x27;S3_linear_{mn}&#x27;, glm_contrast(cs2.y.values, X, g, &#x27;linear&#x27;, e_j(X.shape[1]), &#x27;cr2&#x27;, expo=False))
+
+# ---- smoking-history sensitivity models with multiple imputation (FCS, predictive mean matching) ----
+c0 = cs.reset_index(drop=True); miss = c0[SH].isna().any(axis=1).values
+VD = pd.get_dummies(c0.village, drop_first=True).astype(float)
+BASE = pd.concat([c0[[&#x27;age&#x27;, &#x27;male&#x27;, &#x27;edu_prim&#x27;, &#x27;edu_mid&#x27;, &#x27;loginc&#x27;, &#x27;farmer&#x27;, &#x27;married&#x27;, &#x27;hl&#x27;, &#x27;FTND_total&#x27;, &#x27;daily&#x27;]].astype(float), VD], axis=1)
+
+def fcs_pmm(rng, iters=20, k=5):
+    df = c0.copy()
+    for v in SH: df.loc[df[v].isna(), v] = rng.choice(c0[v].dropna().values, df[v].isna().sum())
+    for _ in range(iters):
+        for v in SH:
+            mv = c0[v].isna().values
+            X = np.column_stack([np.ones(len(df)), BASE.values, df[[o for o in SH if o != v]].values])
+            Xo, yo, Xm = X[~mv], df.loc[~mv, v].values.astype(float), X[mv]
+            XtX = Xo.T @ Xo; bh = np.linalg.solve(XtX, Xo.T @ yo)
+            s2 = np.sum((yo-Xo @ bh)**2)/rng.chisquare(len(yo)-X.shape[1])
+            bs_ = rng.multivariate_normal(bh, s2*np.linalg.inv(XtX))
+            po, pm = Xo @ bh, Xm @ bs_
+            df.loc[mv, v] = [yo[rng.choice(np.argsort(np.abs(po-p))[:k])] for p in pm]
+    return df
+
+def ordinal_est_var(df, cols):
+    X = ordX(df, cols); th, Ai, S, K = fit_ordinal(X, df.ftnd_sev.values)
+    gg = df.village.values; G = len(np.unique(gg))
+    M = sum(np.outer(S[gg == u].sum(0), S[gg == u].sum(0)) for u in np.unique(gg))
+    V = Ai @ M @ Ai*G/(G-1); return th[K-1], V[K-1, K-1]
+
+def rubin(est, var, dfcom=7):
+    m = len(est); q = np.mean(est); W = np.mean(var); B = np.var(est, ddof=1); T = W+(1+1/m)*B
+    lam = (1+1/m)*B/T; dfold = (m-1)/lam**2 if lam &gt; 0 else np.inf
+    dfobs = (dfcom+1)/(dfcom+3)*dfcom*(1-lam); dfa = 1/(1/dfold+1/dfobs) if np.isfinite(dfold) else dfobs
+    t = stats.t.ppf(.975, dfa); se = np.sqrt(T)
+    return dict(est=np.exp(q), lo=np.exp(q-t*se), hi=np.exp(q+t*se), p=2*stats.t.sf(abs(q/se), dfa), df=dfa)
+
+rng = np.random.default_rng(SEED); M_IMP = 50
+est = {v: [] for v in SH[:2]}; var = {v: [] for v in SH[:2]}
+for _ in range(M_IMP):
+    imp = fcs_pmm(rng)
+    for v in SH[:2]:
+        e, vv = ordinal_est_var(imp, CORE+[v]); est[v].append(e); var[v].append(vv)
+keep(&#x27;T4_initage_MI&#x27;, rubin(est[&#x27;gulvxiyan_age&#x27;], var[&#x27;gulvxiyan_age&#x27;]))
+keep(&#x27;T4_duration_MI&#x27;, rubin(est[&#x27;muqianyanling_month&#x27;], var[&#x27;muqianyanling_month&#x27;]))
+for v, key in [(&#x27;gulvxiyan_age&#x27;, &#x27;S3_initage_CC&#x27;), (&#x27;muqianyanling_month&#x27;, &#x27;S3_duration_CC&#x27;)]:
+    sub = cs.dropna(subset=[v]); keep(key, ordinal_contrast(ordX(sub, CORE+[v]), sub.ftnd_sev.values, sub.village.values, 0, &#x27;cr1&#x27;))
+
+# =====================================================================
+# 7. Within- and between-village decomposition (S5 Table)
+# =====================================================================
+log(&#x27;\n=== S5 Table ===&#x27;)
+for lab, dd, fam in [(&#x27;ever&#x27;, ever, &#x27;poisson&#x27;), (&#x27;current&#x27;, cur, &#x27;poisson&#x27;), (&#x27;ftnd_linear&#x27;, cs2, &#x27;linear&#x27;)]:
+    dd2 = dd.copy(); dd2[&#x27;hl_b&#x27;] = dd2.groupby(&#x27;village&#x27;).hl5.transform(&#x27;mean&#x27;); dd2[&#x27;hl_w&#x27;] = dd2.hl5-dd2.hl_b
+    X = np.column_stack([np.ones(len(dd2)), dd2[[&#x27;hl_w&#x27;, &#x27;hl_b&#x27;]+CORE].values.astype(float)])
+    ex = fam != &#x27;linear&#x27;
+    keep(f&#x27;S5_{lab}_within&#x27;, glm_contrast(dd2.y.values, X, dd2.village.values, fam, e_j(X.shape[1], 1), expo=ex))
+    keep(f&#x27;S5_{lab}_between&#x27;, glm_contrast(dd2.y.values, X, dd2.village.values, fam, e_j(X.shape[1], 2), expo=ex))
+
+# =====================================================================
+# 8. S3 Fig: spline curves (reference = median score)
+# =====================================================================
+import matplotlib; matplotlib.use(&#x27;Agg&#x27;); import matplotlib.pyplot as plt
+fig, axes = plt.subplots(1, 2, figsize=(9, 3.8), dpi=300)
+for ax, (lab, dd, title) in zip(axes, [(&#x27;ever&#x27;, ever, &#x27;A. Ever vs never smoking&#x27;), (&#x27;current&#x27;, cur, &#x27;B. Current vs former smoking (ever smokers)&#x27;)]):
+    kn = np.percentile(dd.hl, [10, 50, 90]); S = rcs_basis(dd.hl.values, kn)
+    base = Xmat(dd, CORE); X = np.column_stack([base[:, :1], dd.hl.values, S, base[:, 2:]])
+    b, Xt, rt = fit_glm(dd.y.values, X, &#x27;poisson&#x27;)
+    grid = np.linspace(np.percentile(dd.hl, 2.5), np.percentile(dd.hl, 97.5), 40); ref = np.median(dd.hl)
+    Sg = rcs_basis(grid, kn); Sr = rcs_basis(np.array([ref]), kn)
+    lo, mid, hi = [], [], []
+    for gi, sg in zip(grid, Sg):
+        c = np.zeros(X.shape[1]); c[1] = gi-ref; c[2:2+S.shape[1]] = sg-Sr[0]
+        r = ci(*cr2(b, Xt, rt, dd.village.values, c)) if abs(gi-ref) &gt; 1e-9 else dict(est=1, lo=1, hi=1)
+        mid.append(r[&#x27;est&#x27;]); lo.append(r[&#x27;lo&#x27;]); hi.append(r[&#x27;hi&#x27;])
+    ax.fill_between(grid, lo, hi, color=&#x27;0.8&#x27;, lw=0); ax.plot(grid, mid, color=&#x27;k&#x27;, lw=1.5)
+    ax.axhline(1, color=&#x27;0.4&#x27;, lw=0.8, ls=&#x27;--&#x27;); ax.set_yscale(&#x27;log&#x27;)
+    ticks = [0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4]
+    ax.set_yticks(ticks); ax.set_yticklabels([f&#x27;{t:.1f}&#x27; for t in ticks]); ax.minorticks_off()
+    ax.set_xlabel(&#x27;Total health-literacy score&#x27;); ax.set_ylabel(&#x27;Adjusted prevalence ratio&#x27;); ax.set_title(title, fontsize=9, loc=&#x27;left&#x27;)
+    ax.plot(dd.hl, np.full(len(dd), 0.62), &#x27;|&#x27;, color=&#x27;0.5&#x27;, ms=4, alpha=.4)   # observed scores
+    ax.set_ylim(0.6, 1.5)
+plt.tight_layout(); plt.savefig(os.path.join(OUTDIR, &#x27;S3_Fig.png&#x27;)); plt.close()
+
+json.dump(R, open(os.path.join(OUTDIR, &#x27;results.json&#x27;), &#x27;w&#x27;), indent=1, ensure_ascii=False, default=float)
+open(os.path.join(OUTDIR, &#x27;results.txt&#x27;), &#x27;w&#x27;).write(&#x27;\n&#x27;.join(LOG))
+log(&#x27;\nDone.&#x27;)
+</code></pre></details>
+<details><summary>cr2_methods.py</summary><pre><code>&quot;&quot;&quot;cr2_methods.py
+
+Small-sample cluster-robust inference for GLMs (CR2 + Satterthwaite), following
+Bell &amp; McCaffrey (2002) and Pustejovsky &amp; Tipton (2018), as implemented in R clubSandwich
+for lm/glm (working-weight linearisation). Also: Mancl-DeRouen, CR1, ordinal logit,
+Brant test, random-intercept models (Gauss-Hermite), Firth logistic with profile CIs.&quot;&quot;&quot;
+import numpy as np, pandas as pd
+from scipy import stats, optimize, linalg
+
+# ---------------- GLM via IRLS ----------------
+def fit_glm(y, X, fam, pw=None, tol=1e-10):
+    n, k = X.shape
+    pw = np.ones(n) if pw is None else pw
+    b = np.zeros(k)
+    if fam == &#x27;poisson&#x27;: b[0] = np.log(np.average(y, weights=pw))
+    for _ in range(200):
+        eta = X @ b
+        if fam == &#x27;poisson&#x27;: mu = np.exp(eta); dmu = mu; v = mu
+        elif fam == &#x27;logit&#x27;: mu = 1/(1+np.exp(-eta)); dmu = mu*(1-mu); v = dmu
+        else: mu = eta; dmu = np.ones(n); v = np.ones(n)
+        w = pw*dmu**2/v
+        z = eta + (y-mu)/dmu
+        bn = np.linalg.solve(X.T @ (X*w[:, None]), X.T @ (w*z))
+        if np.max(np.abs(bn-b)) &lt; tol: b = bn; break
+        b = bn
+    eta = X @ b
+    if fam == &#x27;poisson&#x27;: mu = np.exp(eta); dmu = mu; v = mu
+    elif fam == &#x27;logit&#x27;: mu = 1/(1+np.exp(-eta)); dmu = mu*(1-mu); v = dmu
+    else: mu = eta; dmu = np.ones(n); v = np.ones(n)
+    w = pw*dmu**2/v
+    rt = np.sqrt(w)*(y-mu)/dmu          # residual on the linearised (whitened) scale
+    Xt = X*np.sqrt(w)[:, None]
+    return b, Xt, rt
+
+def _isqrt_psd(M):
+    &quot;&quot;&quot;symmetric (pseudo-)inverse square root&quot;&quot;&quot;
+    vals, vecs = np.linalg.eigh((M+M.T)/2)
+    inv = np.array([1/np.sqrt(v) if v &gt; 1e-10 else 0.0 for v in vals])
+    return (vecs*inv) @ vecs.T
+
+def cr2(b, Xt, rt, cl, c):
+    &quot;&quot;&quot;returns estimate, se, Satterthwaite df for contrast c&#x27;b&quot;&quot;&quot;
+    B = np.linalg.inv(Xt.T @ Xt)
+    n = len(rt); groups = pd.unique(cl)
+    H = Xt @ B @ Xt.T
+    IH = np.eye(n) - H
+    meat = np.zeros_like(B); Q = []
+    Bc = B @ c
+    for g in groups:
+        i = np.where(cl == g)[0]
+        A = _isqrt_psd(IH[np.ix_(i, i)])
+        u = Xt[i].T @ (A @ rt[i]); meat += np.outer(u, u)
+        gg = A @ (Xt[i] @ Bc)
+        Q.append(IH[i, :].T @ gg)
+    V = B @ meat @ B
+    Q = np.column_stack(Q); Om = Q.T @ Q
+    df = np.trace(Om)**2/np.trace(Om @ Om)
+    return c @ b, np.sqrt(c @ V @ c), df
+
+def cr_md(b, Xt, rt, cl, c):
+    &quot;&quot;&quot;Mancl-DeRouen (CR3-type) with t(G-1)&quot;&quot;&quot;
+    B = np.linalg.inv(Xt.T @ Xt); meat = np.zeros_like(B); groups = pd.unique(cl)
+    for g in groups:
+        i = np.where(cl == g)[0]; Hgg = Xt[i] @ B @ Xt[i].T
+        u = Xt[i].T @ np.linalg.pinv(np.eye(len(i))-Hgg) @ rt[i]; meat += np.outer(u, u)
+    V = B @ meat @ B
+    return c @ b, np.sqrt(c @ V @ c), len(groups)-1
+
+def cr1(b, Xt, rt, cl, c):
+    B = np.linalg.inv(Xt.T @ Xt); meat = np.zeros_like(B); groups = pd.unique(cl)
+    for g in groups:
+        i = np.where(cl == g)[0]; u = Xt[i].T @ rt[i]; meat += np.outer(u, u)
+    G = len(groups); n, k = Xt.shape
+    V = B @ meat @ B*G/(G-1)*(n-1)/(n-k)
+    return c @ b, np.sqrt(c @ V @ c), G-1
+
+def hc0(b, Xt, rt, cl, c):
+    B = np.linalg.inv(Xt.T @ Xt); U = Xt*rt[:, None]; V = B @ (U.T @ U) @ B
+    return c @ b, np.sqrt(c @ V @ c), np.inf
+
+def ci(est, se, df, expo=True):
+    t = stats.norm.ppf(.975) if np.isinf(df) else stats.t.ppf(.975, df)
+    p = 2*(stats.norm.sf(abs(est/se)) if np.isinf(df) else stats.t.sf(abs(est/se), df))
+    f = np.exp if expo else (lambda z: z)
+    return dict(est=f(est), lo=f(est-t*se), hi=f(est+t*se), p=p, df=df)
+
+def glm_contrast(y, X, cl, fam, c, method=&#x27;cr2&#x27;, pw=None, expo=True):
+    b, Xt, rt = fit_glm(y, X, fam, pw)
+    fn = dict(cr2=cr2, md=cr_md, cr1=cr1, hc0=hc0)[method]
+    return ci(*fn(b, Xt, rt, cl, c), expo=expo)
+
+# ---------------- ordinal (proportional odds) ----------------
+def _ord_ll(theta, X, y, K):
+    a = np.cumsum(np.r_[theta[0], np.exp(theta[1:K-1])])  # increasing cutpoints
+    beta = theta[K-1:]; xb = X @ beta
+    F = lambda t: 1/(1+np.exp(-t))
+    cum = np.column_stack([F(a[j]-xb) for j in range(K-1)])
+    P = np.column_stack([cum[:, 0]] + [cum[:, j]-cum[:, j-1] for j in range(1, K-1)] + [1-cum[:, -1]])
+    return np.log(np.clip(P[np.arange(len(y)), y], 1e-300, None))
+
+def fit_ordinal(X, y, cl=None):
+    K = int(y.max())+1
+    th0 = np.r_[-0.5, np.zeros(K-2), np.zeros(X.shape[1])]
+    f = lambda t: -_ord_ll(t, X, y, K).sum()
+    r = optimize.minimize(f, th0, method=&#x27;BFGS&#x27;, options=dict(gtol=1e-8, maxiter=5000))
+    th = r.x
+    # numerical scores and Hessian
+    h = 1e-5; p = len(th)
+    S = np.array([(_ord_ll(th+h*e, X, y, K)-_ord_ll(th-h*e, X, y, K))/(2*h) for e in np.eye(p)]).T
+    Hs = np.zeros((p, p))
+    for i in range(p):
+        ei = np.eye(p)[i]
+        Hs[i] = (np.array([(_ord_ll(th+h*ei+h*e, X, y, K)-_ord_ll(th+h*ei-h*e, X, y, K)).sum()/(2*h) for e in np.eye(p)]) -
+                 np.array([(_ord_ll(th-h*ei+h*e, X, y, K)-_ord_ll(th-h*ei-h*e, X, y, K)).sum()/(2*h) for e in np.eye(p)]))/(2*h)
+    Ai = np.linalg.inv(-(Hs+Hs.T)/2)
+    return th, Ai, S, K
+
+def ordinal_contrast(X, y, cl, j, method=&#x27;cr1&#x27;):
+    th, Ai, S, K = fit_ordinal(X, y)
+    idx = K-1+j
+    groups = pd.unique(cl); G = len(groups); n, p = S.shape
+    if method == &#x27;cr1&#x27;:
+        M = sum(np.outer(S[cl == g].sum(0), S[cl == g].sum(0)) for g in groups)
+        V = Ai @ M @ Ai*G/(G-1); df = G-1
+    elif method == &#x27;hc0&#x27;:
+        V = Ai @ (S.T @ S) @ Ai; df = np.inf
+    elif method == &#x27;model&#x27;:
+        V = Ai; df = np.inf
+    # positive beta = higher severity  (P(Y&lt;=j)=F(a_j - xb))
+    return ci(th[idx], np.sqrt(V[idx, idx]), df)
+
+def brant(X, y):
+    &quot;&quot;&quot;Brant (1990) test. X without intercept. returns omnibus chi2,df,p and per-variable p.&quot;&quot;&quot;
+    K = int(y.max())+1; n, k = X.shape
+    Xc = np.column_stack([np.ones(n), X])
+    bs, pis = [], []
+    for j in range(K-1):
+        yy = (y &gt; j).astype(float)
+        b, _, _ = fit_glm(yy, Xc, &#x27;logit&#x27;); bs.append(b); pis.append(1/(1+np.exp(-Xc @ b)))
+    Vs = {}
+    for a in range(K-1):
+        for c_ in range(a, K-1):
+            Wa = pis[a]*(1-pis[a]); Wc = pis[c_]*(1-pis[c_])
+            Ia = np.linalg.inv(Xc.T @ (Xc*Wa[:, None])); Ic = np.linalg.inv(Xc.T @ (Xc*Wc[:, None]))
+            Wac = pis[c_]-pis[a]*pis[c_]   # pi_c &lt;= pi_a for c&gt;a  (P(Y&gt;c) &lt;= P(Y&gt;a))
+            Vs[(a, c_)] = Ia @ Xc.T @ (Xc*Wac[:, None]) @ Ic
+    # stack slopes (drop intercepts)
+    beta = np.concatenate([b[1:] for b in bs])
+    J = K-1; Vfull = np.zeros((J*k, J*k))
+    for a in range(J):
+        for c_ in range(J):
+            m = Vs[(min(a, c_), max(a, c_))]
+            if a &gt; c_: m = m.T
+            Vfull[a*k:(a+1)*k, c_*k:(c_+1)*k] = m[1:, 1:]
+    D = np.zeros(((J-1)*k, J*k))
+    for r in range(J-1):
+        D[r*k:(r+1)*k, 0:k] = np.eye(k); D[r*k:(r+1)*k, (r+1)*k:(r+2)*k] = -np.eye(k)
+    d = D @ beta; Vd = D @ Vfull @ D.T
+    chi = d @ np.linalg.solve(Vd, d); dfo = (J-1)*k
+    per = []
+    for v in range(k):
+        rows = [r*k+v for r in range(J-1)]
+        dv = d[rows]; Vv = Vd[np.ix_(rows, rows)]
+        cv = dv @ np.linalg.solve(Vv, dv); per.append(stats.chi2.sf(cv, J-1))
+    return chi, dfo, stats.chi2.sf(chi, dfo), per, [b[1:] for b in bs]
+
+# ---------------- random intercept models (Gauss-Hermite) ----------------
+GH_X, GH_W = np.polynomial.hermite.hermgauss(60)
+def ri_fit(ll_fun, theta0, cl):
+    &quot;&quot;&quot;ll_fun(theta_fixed, offset_vector) -&gt; per-observation loglik; last element of theta = log sigma&quot;&quot;&quot;
+    groups = pd.unique(cl); idx = [np.where(cl == g)[0] for g in groups]
+    def negll(th):
+        s = np.exp(th[-1]); tot = 0
+        for i in idx:
+            vals = np.array([ll_fun(th[:-1], i, np.sqrt(2)*s*x).sum() for x in GH_X])
+            m = vals.max(); tot += m+np.log(np.sum(GH_W*np.exp(vals-m))/np.sqrt(np.pi))
+        return -tot
+    r = optimize.minimize(negll, theta0, method=&#x27;BFGS&#x27;, options=dict(gtol=1e-6, maxiter=3000))
+    th = r.x; p = len(th); h = 1e-4
+    Hs = np.zeros((p, p))
+    for a in range(p):
+        for c_ in range(a, p):
+            ea = np.eye(p)[a]*h; ec = np.eye(p)[c_]*h
+            Hs[a, c_] = Hs[c_, a] = (negll(th+ea+ec)-negll(th+ea-ec)-negll(th-ea+ec)+negll(th-ea-ec))/(4*h*h)
+    return th, np.linalg.inv(Hs)
+
+def ri_logit(y, X, cl):
+    def ll(beta, i, off):
+        eta = X[i] @ beta+off; return y[i]*eta-np.log1p(np.exp(eta))
+    b0, _, _ = fit_glm(y, X, &#x27;logit&#x27;)
+    return ri_fit(ll, np.r_[b0, np.log(0.2)], cl)
+
+def ri_ordinal(y, X, cl):
+    K = int(y.max())+1
+    def ll(theta, i, off):
+        return _ord_ll_off(theta, X[i], y[i], K, off)
+    th0, _, _, _ = fit_ordinal(X, y)
+    return ri_fit(ll, np.r_[th0, np.log(0.2)], cl), K
+
+def _ord_ll_off(theta, X, y, K, off):
+    a = np.cumsum(np.r_[theta[0], np.exp(theta[1:K-1])]); beta = theta[K-1:]; xb = X @ beta+off
+    F = lambda t: 1/(1+np.exp(-t))
+    cum = np.column_stack([F(a[j]-xb) for j in range(K-1)])
+    P = np.column_stack([cum[:, 0]] + [cum[:, j]-cum[:, j-1] for j in range(1, K-1)] + [1-cum[:, -1]])
+    return np.log(np.clip(P[np.arange(len(y)), y], 1e-300, None))
+
+# ---------------- Firth logistic with profile penalised likelihood CI ----------------
+def _firth_pll(b, X, y):
+    eta = X @ b; mu = 1/(1+np.exp(-eta)); w = mu*(1-mu)
+    ll = np.sum(y*eta-np.log1p(np.exp(eta)))
+    sign, logdet = np.linalg.slogdet(X.T @ (X*w[:, None]))
+    return ll+0.5*logdet
+
+def firth(y, X, fix=None):
+    k = X.shape[1]; b = np.zeros(k)
+    free = [i for i in range(k) if fix is None or i != fix[0]]
+    if fix is not None: b[fix[0]] = fix[1]
+    for _ in range(300):
+        eta = X @ b; mu = 1/(1+np.exp(-eta)); w = mu*(1-mu)
+        XW = X*np.sqrt(w)[:, None]; I = X.T @ (X*w[:, None])
+        h = np.einsum(&#x27;ij,jk,ik-&gt;i&#x27;, XW, np.linalg.inv(I), XW)
+        U = X.T @ (y-mu+h*(0.5-mu))
+        Uf = U[free]; If = I[np.ix_(free, free)]
+        step = np.linalg.solve(If, Uf)
+        # step halving to ensure increase
+        t = 1.0; old = _firth_pll(b, X, y)
+        while t &gt; 1e-6:
+            bn = b.copy(); bn[free] = b[free]+t*step
+            if _firth_pll(bn, X, y) &gt;= old-1e-12: break
+            t /= 2
+        b = bn
+        if np.max(np.abs(t*step)) &lt; 1e-9: break
+    return b, _firth_pll(b, X, y)
+
+def firth_ci(y, X, j):
+    b, pl = firth(y, X)
+    crit = stats.chi2.ppf(.95, 1)/2
+    g = lambda v: pl-firth(y, X, fix=(j, v))[1]-crit
+    def bracket(sign):
+        step = 0.1
+        while g(b[j]+sign*step) &lt; 0: step *= 1.5
+        return b[j]+sign*step
+    lo = optimize.brentq(g, bracket(-1), b[j]); hi = optimize.brentq(g, b[j], bracket(1))
+    p = stats.chi2.sf(2*(pl-firth(y, X, fix=(j, 0.0))[1]), 1)
+    return dict(est=np.exp(b[j]), lo=np.exp(lo), hi=np.exp(hi), p=p)
+
+# ---------------- splines ----------------
+def rcs_basis(x, knots):
+    t = np.asarray(knots); k = len(t); f = lambda u: np.clip(u, 0, None)**3
+    cols = []
+    for j in range(k-2):
+        cols.append((f(x-t[j]) - f(x-t[k-2])*(t[k-1]-t[j])/(t[k-1]-t[k-2]) + f(x-t[k-1])*(t[k-2]-t[j])/(t[k-1]-t[k-2]))/(t[k-1]-t[0])**2)
+    return np.column_stack(cols)
+
+def icc_anova(y, g):
+    df = pd.DataFrame({&#x27;y&#x27;: y, &#x27;g&#x27;: g}); k = df.groupby(&#x27;g&#x27;).size(); N = len(df); a = len(k)
+    n0 = (N-(k**2).sum()/N)/(a-1)
+    msb = (k*(df.groupby(&#x27;g&#x27;).y.mean()-df.y.mean())**2).sum()/(a-1)
+    msw = ((df.y-df.groupby(&#x27;g&#x27;).y.transform(&#x27;mean&#x27;))**2).sum()/(N-a)
+    return (msb-msw)/(msb+(n0-1)*msw)
+
+# ---------------- partial proportional odds (one covariate non-proportional), 3 levels ----------------
+def _ppo_ll(th, X, z, y):
+    a1, a2 = th[0], th[0]+np.exp(th[1]); beta = th[2:2+X.shape[1]]; g1, g2 = th[-2], th[-1]
+    F = lambda t: 1/(1+np.exp(-t)); xb = X @ beta
+    c1 = F(a1-xb-g1*z); c2 = F(a2-xb-g2*z)
+    P = np.column_stack([c1, c2-c1, 1-c2])
+    return np.log(np.clip(P[np.arange(len(y)), y], 1e-300, None))
+
+def ppo_contrast(X, z, y, cl, j=0):
+    p = 2+X.shape[1]+2; th0 = np.r_[-0.5, 0.0, np.zeros(p-2)]
+    r = optimize.minimize(lambda t: -_ppo_ll(t, X, z, y).sum(), th0, method=&#x27;BFGS&#x27;, options=dict(gtol=1e-8, maxiter=5000))
+    th = r.x; h = 1e-5; E = np.eye(p)
+    S = np.array([(_ppo_ll(th+h*e, X, z, y)-_ppo_ll(th-h*e, X, z, y))/(2*h) for e in E]).T
+    L = lambda t: _ppo_ll(t, X, z, y).sum()
+    Hs = np.array([[(L(th+h*ei+h*ej)-L(th+h*ei-h*ej)-L(th-h*ei+h*ej)+L(th-h*ei-h*ej))/(4*h*h) for ej in E] for ei in E])
+    Ai = np.linalg.inv(-(Hs+Hs.T)/2); groups = pd.unique(cl); G = len(groups)
+    M = sum(np.outer(S[cl == g].sum(0), S[cl == g].sum(0)) for g in groups)
+    V = Ai @ M @ Ai*G/(G-1); idx = 2+j
+    return ci(th[idx], np.sqrt(V[idx, idx]), G-1)
+</code></pre></details>
+<details><summary>README.md</summary><pre><code># Health literacy and smoking among Wa adults — analysis code
+
+Code for the manuscript &quot;Health literacy, smoking status, and nicotine dependence among Wa adults in rural southwest China: a cross-sectional analysis&quot; (PLOS ONE, revised version).
+
+## Files
+- `cr2_methods.py` — statistical methods: GLM fitting, CR2 cluster-robust variance with Satterthwaite degrees of freedom, Mancl–DeRouen and CR1 variance, proportional odds and partial proportional odds models, Brant test, random-intercept models, Firth logistic regression, restricted cubic splines.
+- `wa_hl_smoking_analysis.py` — all analyses reported in the manuscript and Supporting Information.
+
+## Run
+```
+pip install numpy pandas scipy matplotlib openpyxl
+python wa_hl_smoking_analysis.py &lt;analytic_data.xlsx&gt; &lt;output_folder&gt;
+```
+Outputs: `results.json`, `results.txt`, `S3_Fig.png`. Multiple imputation uses a fixed random seed (20261102).
+
+## Data
+The individual-level data are not public. See the Data Availability Statement of the article for the request procedure. Variable definitions are given in S1 File (data dictionary).
+</code></pre></details></section>
+<footer>此页面由本次核查报告和现有分析脚本生成。无需联网即可查看。</footer></main></body></html>
